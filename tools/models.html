@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Labo modèles 3D</title>
+  <style>
+    html, body { margin: 0; background: #1a1716; color: #fff; font: 14px system-ui; }
+    html.thumb, html.thumb body { background: transparent; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+    .labels { position: fixed; inset: 0; display: grid; pointer-events: none; }
+    .labels span { padding: 6px 8px; opacity: .6; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div class="labels" id="labels"></div>
+  <script type="module" src="./models.js"></script>
+</body>
+</html>
