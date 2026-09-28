@@ -373,3 +373,46 @@
 [data-tilt]:hover::after {
   opacity: 1;
 }
+
+/* --- photos des plats et plats épuisés (carte gérée depuis le tableau de bord) ------------------- */
+.dish__card.has-photo {
+  min-height: 132px;
+  padding-left: 126px;
+}
+.dish__photo {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 96px;
+  height: 96px;
+  border-radius: 14px;
+  object-fit: cover;
+  background: var(--surface-3);
+  box-shadow:
+    inset 0 0 0 1px var(--line),
+    0 16px 26px -16px rgb(0 0 0 / 0.95);
+  transform: translateZ(30px);
+}
+.dish__card.is-soldout :is(.dish__name, .dish__price, .dish__desc, .dish__photo, .dish__tags) {
+  opacity: 0.45;
+}
+.dish__add:disabled {
+  padding: 0 14px;
+  background: transparent;
+  color: var(--text-3);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  cursor: not-allowed;
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+@media (max-width: 420px) {
+  .dish__card.has-photo {
+    padding-left: 108px;
+  }
+  .dish__photo {
+    width: 80px;
+    height: 80px;
+  }
+}

@@ -1,7 +1,7 @@
 import { SUPPLEMENTS, formatDA } from '../data/menu.js'
 import { cart, unitPrice } from './store.js'
 import { openOverlay, closeOverlay } from './dialog.js'
-import { renderUrl } from './renders.js'
+import { productImage } from './renders.js'
 import { esc } from './env.js'
 
 /** Fenêtre de personnalisation : taille, viande, parfums, suppléments, quantité. */
@@ -89,7 +89,8 @@ export function initCustomize({ onAdded } = {}) {
     catEl.textContent = p.category.name
     descEl.textContent = p.desc ?? ''
     descEl.hidden = !p.desc
-    imgEl.src = renderUrl(p.category.model)
+    imgEl.src = productImage(p)
+    imgEl.classList.toggle('is-photo', Boolean(p.image))
     optionsEl.innerHTML = buildOptions(p)
     noteEl.value = ''
     noteEl.placeholder = p.category.id === 'jus' ? 'Ex\u00a0: fraise et banane' : 'Ex\u00a0: sans oignons, bien cuit'

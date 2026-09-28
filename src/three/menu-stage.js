@@ -117,7 +117,7 @@ export async function initMenuStage({ container, canvas, categories, logoUrl, on
   scene.add(floorGlow)
 
   // --- cadrage responsive --------------------------------------------------------
-  autoResize(container, renderer, camera, (w, h) => {
+  const stopResize = autoResize(container, renderer, camera, (w, h) => {
     const aspect = w / h
     // plus l'écran est étroit, plus la caméra recule pour garder le plat entier
     const dist = aspect < 1 ? 5.3 + (1 - aspect) * 3.2 : 5.1
@@ -157,6 +157,8 @@ export async function initMenuStage({ container, canvas, categories, logoUrl, on
 
   // --- glisser pour tourner ----------------------------------------------------------
   const drag = { on: false, x0: 0, a0: 0, t0: 0, lastX: 0, lastT: 0, v: 0, moved: 0 }
+  const listening = new AbortController()
+  const { signal } = listening
   const raycaster = new Raycaster()
   const ndc = new Vector2()
 
@@ -170,7 +172,7 @@ export async function initMenuStage({ container, canvas, categories, logoUrl, on
     tween?.kill()
     canvas.setPointerCapture(e.pointerId)
     container.classList.add('is-grabbing')
-  })
+  }, { signal })
   canvas.addEventListener('pointermove', (e) => {
     if (!drag.on) return
     const dx = e.clientX - drag.x0
@@ -182,7 +184,7 @@ export async function initMenuStage({ container, canvas, categories, logoUrl, on
     drag.v = -((e.clientX - drag.lastX) / w) * 2.4 / (dt / 1000)
     drag.lastX = e.clientX
     drag.lastT = now
-  })
+  }, { signal })
   const release = (e) => {
     if (!drag.on) return
     drag.on = false
@@ -208,12 +210,12 @@ export async function initMenuStage({ container, canvas, categories, logoUrl, on
     const target = Math.round(state.angle + MathUtils.clamp(drag.v * 0.25, -2, 2))
     goTo(target)
   }
-  canvas.addEventListener('pointerup', release)
-  canvas.addEventListener('pointercancel', release)
+  canvas.addEventListener('pointerup', release, { signal })
+  canvas.addEventListener('pointercancel', release, { signal })
 
   // --- boucle -----------------------------------------------------------------------
   let t = 0
-  addLoop(container, (dt) => {
+  const stopLoop = addLoop(container, (dt) => {
     t += dt
     carousel.rotation.y = -state.angle * step
     const fractional = state.angle
@@ -239,5 +241,19 @@ export async function initMenuStage({ container, canvas, categories, logoUrl, on
     setActive,
     next: () => goTo(Math.round(state.angle) + 1),
     prev: () => goTo(Math.round(state.angle) - 1),
+    /** Libère le plateau (la carte a changé de catégories : un nouveau plateau est construit). */
+    destroy() {
+      queue.length = 0
+      tween?.kill()
+      stopLoop()
+      stopResize()
+      listening.abort()
+      scene.traverse((o) => {
+        o.geometry?.dispose()
+        for (const m of [o.material].flat()) m?.dispose()
+      })
+      renderer.dispose()
+      renderer.forceContextLoss()
+    },
   }
 }

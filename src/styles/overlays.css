@@ -693,3 +693,215 @@
   height: 100%;
   object-fit: contain;
 }
+
+/* --- commande en ligne : envoi, erreurs, suivi ------------------------------------------------------ */
+.hp {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.checkout__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 12px 14px;
+  border-radius: var(--r-tile);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+.checkout__note .icon {
+  margin-top: 1px;
+  font-size: 17px;
+  color: var(--accent);
+}
+.checkout__error {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border-radius: var(--r-tile);
+  background: rgb(255 122 107 / 0.1);
+  box-shadow: inset 0 0 0 1px rgb(255 122 107 / 0.35);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--danger);
+}
+.checkout__fallback {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border-radius: var(--r-tile);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  font-size: 14px;
+  color: var(--text-2);
+}
+.btn.is-busy .icon {
+  display: none;
+}
+.btn.is-busy::before {
+  content: '';
+  width: 18px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+.btn.is-busy:disabled {
+  opacity: 0.85;
+  cursor: progress;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.done__icon--pending {
+  position: relative;
+  background: var(--surface-2);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.done__icon--pending::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  opacity: 0;
+  animation: ring 2s var(--ease) infinite;
+}
+.done__icon--confirmed {
+  background: var(--ok);
+  color: #07170c;
+  box-shadow: 0 12px 30px -12px rgb(95 194 122 / 0.7);
+}
+.done__icon--rejected {
+  background: var(--surface-2);
+  color: var(--danger);
+  box-shadow: inset 0 0 0 1px rgb(255 122 107 / 0.45);
+}
+.done__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+.done__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.done__pill--pending {
+  color: var(--accent-2);
+}
+.done__pill--pending .done__dot {
+  animation: blink 1.4s ease-in-out infinite;
+}
+.done__pill--confirmed {
+  color: var(--ok);
+}
+.done__pill--rejected {
+  color: var(--danger);
+}
+.done__text {
+  max-width: 34ch;
+}
+.done__meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+  max-width: 360px;
+  margin: 6px 0 2px;
+}
+.done__meta div {
+  padding: 12px;
+  border-radius: var(--r-tile);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.done__meta dt {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.done__meta dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 26px;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+@keyframes ring {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.25);
+    opacity: 0;
+  }
+}
+@keyframes blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.last-order {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 360px;
+  margin-top: 22px;
+  padding: 14px 16px;
+  border-radius: var(--r-card);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  text-align: left;
+  color: var(--text);
+  transition: box-shadow 0.2s;
+}
+.last-order:hover {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.last-order > span {
+  flex: 1;
+  display: grid;
+  gap: 2px;
+}
+.last-order small {
+  font-size: 13px;
+  color: var(--text-3);
+}
+.last-order .icon {
+  font-size: 22px;
+  color: var(--accent);
+}
+.cart-item__img.is-photo,
+.sheet__hero img.is-photo {
+  object-fit: cover;
+  padding: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .done__icon--pending::after,
+  .done__pill--pending .done__dot,
+  .btn.is-busy::before {
+    animation-duration: 3s;
+  }
+}

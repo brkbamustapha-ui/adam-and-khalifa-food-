@@ -25,9 +25,11 @@ function priceLabel(item) {
 
 function dish(item, i = 0) {
   const cat = item.category
-  const verb = item.hasOptions ? 'Choisir' : 'Ajouter'
+  const verb = item.available ? (item.hasOptions ? 'Choisir' : 'Ajouter') : 'Épuisé'
+  const cls = `dish__card${item.image ? ' has-photo' : ''}${item.available ? '' : ' is-soldout'}`
   return `<li class="dish" style="--i: ${Math.min(i, 14)}">
-  <article class="dish__card" data-tilt>
+  <article class="${cls}" data-tilt>
+    ${item.image ? `<img class="dish__photo" src="${esc(item.image)}" alt="${esc(item.fullName)}" width="96" height="96" loading="lazy" decoding="async">` : ''}
     <div class="dish__head">
       <h4 class="dish__name">${esc(item.name)}</h4>
       <p class="dish__price">${priceLabel(item)}</p>
@@ -35,8 +37,8 @@ function dish(item, i = 0) {
     ${item.desc ? `<p class="dish__desc">${esc(item.desc)}</p>` : ''}
     <div class="dish__foot">
       <div class="dish__tags">${item.tags.map(renderTag).join('')}</div>
-      <button class="dish__add" type="button" data-add="${item.id}" aria-label="${verb} ${esc(item.name)} (${esc(cat.name)})">
-        <i data-icon="plus"></i><span>${verb}</span>
+      <button class="dish__add" type="button" data-add="${item.id}"${item.available ? '' : ' disabled'} aria-label="${verb} ${esc(item.name)} (${esc(cat.name)})">
+        ${item.available ? '<i data-icon="plus"></i>' : ''}<span>${verb}</span>
       </button>
     </div>
   </article>
@@ -84,22 +86,25 @@ const SIGNATURES = [
 ]
 
 export function renderSignatures(imgUrl) {
-  return SIGNATURES.map((s) => {
-    const item = PRODUCTS.get(s.id)
-    if (!item) throw new Error(`Produit introuvable : ${s.id}`)
-    return `<article class="bento__cell bento__cell--${s.size}" data-tilt data-reveal>
+  // un incontournable retiré de la carte depuis le tableau de bord disparaît simplement
+  return SIGNATURES.filter((s) => PRODUCTS.has(s.id))
+    .map((s) => {
+      const item = PRODUCTS.get(s.id)
+      const verb = item.available ? (item.hasOptions ? 'Choisir' : 'Ajouter') : 'Épuisé'
+      return `<article class="bento__cell bento__cell--${s.size}" data-tilt data-reveal>
   <div class="bento__media" aria-hidden="true"><img src="${imgUrl(s.img)}" alt="" loading="lazy" decoding="async" width="640" height="640"></div>
   <div class="bento__body">
     <p class="bento__kicker">${esc(s.kicker)}</p>
     <h3 class="bento__title">${esc(s.title)}</h3>
-    <p class="bento__desc">${esc(item.desc)}</p>
+    <p class="bento__desc">${esc(item.desc ?? '')}</p>
     <div class="bento__foot">
       <span class="bento__price">${formatDA(item.fromPrice)}</span>
-      <button class="btn btn--primary btn--sm" type="button" data-add="${item.id}">${item.hasOptions ? 'Choisir' : 'Ajouter'}<i data-icon="plus"></i></button>
+      <button class="btn btn--primary btn--sm" type="button" data-add="${item.id}"${item.available ? '' : ' disabled'}>${verb}${item.available ? '<i data-icon="plus"></i>' : ''}</button>
     </div>
   </div>
 </article>`
-  }).join('')
+    })
+    .join('')
 }
 
 const JUICE_PICKS = [
@@ -112,13 +117,14 @@ const JUICE_PICKS = [
 ]
 
 export function renderJuicePicks() {
-  return JUICE_PICKS.map(([id, label]) => {
-    const item = PRODUCTS.get(id)
-    if (!item) throw new Error(`Produit introuvable : ${id}`)
-    return `<li><button class="pick" type="button" data-add="${item.id}" aria-label="Ajouter ${esc(label)} au panier">
+  return JUICE_PICKS.filter(([id]) => PRODUCTS.get(id)?.available)
+    .map(([id, label]) => {
+      const item = PRODUCTS.get(id)
+      return `<li><button class="pick" type="button" data-add="${item.id}" aria-label="Ajouter ${esc(label)} au panier">
   <span class="pick__name">${esc(label)}</span><span class="pick__price">${formatDA(item.fromPrice)}</span><i data-icon="plus"></i>
 </button></li>`
-  }).join('')
+    })
+    .join('')
 }
 
 /** Données structurées schema.org (Restaurant + carte) pour le référencement. */

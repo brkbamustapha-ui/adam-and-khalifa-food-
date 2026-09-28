@@ -1,12 +1,14 @@
 import { PRODUCTS, formatDA } from '../data/menu.js'
 import { cart, unitPrice, describeLine } from './store.js'
 import { openOverlay, onOverlayChange, isOverlayOpen } from './dialog.js'
-import { renderUrl } from './renders.js'
+import { productImage } from './renders.js'
 import { icons } from './icons.js'
 import { esc } from './env.js'
 
 /** Tiroir du panier : liste des articles, quantités, totaux et étapes (panier, validation, confirmation). */
-export function initCartView({ onShowView } = {}) {
+const STATUS_LABEL = { pending: 'en attente de confirmation', confirmed: 'confirmée', rejected: 'non acceptée' }
+
+export function initCartView({ onShowView, getLastOrder, onOpenLastOrder } = {}) {
   const list = document.querySelector('[data-cart-list]')
   const empty = document.querySelector('[data-cart-empty]')
   const foot = document.querySelector('[data-cart-foot]')
@@ -16,12 +18,14 @@ export function initCartView({ onShowView } = {}) {
   const cartBtn = document.querySelector('.cart-btn')
   const title = document.querySelector('[data-drawer-title]')
   const views = document.querySelectorAll('[data-view]')
+  const lastBtn = document.querySelector('[data-last-order]')
+  let view = 'cart'
 
   const itemHTML = (l, i) => {
     const p = PRODUCTS.get(l.id)
     const opts = describeLine(l)
     return `<li class="cart-item" data-index="${i}">
-  <img class="cart-item__img" src="${renderUrl(p.category.model)}" alt="" width="64" height="64" loading="lazy">
+  <img class="cart-item__img${p.image ? ' is-photo' : ''}" src="${esc(productImage(p))}" alt="" width="64" height="64" loading="lazy">
   <div>
     <div class="cart-item__top">
       <div>
@@ -54,7 +58,19 @@ export function initCartView({ onShowView } = {}) {
     document.documentElement.classList.toggle('has-items', n > 0)
     cartbar?.classList.toggle('is-visible', n > 0 && !isOverlayOpen())
     cartBtn?.setAttribute('aria-label', n ? `Ouvrir le panier (${n} article${n > 1 ? 's' : ''})` : 'Ouvrir le panier')
+    // panier vide : raccourci vers le suivi de la dernière commande
+    const last = lines.length ? null : getLastOrder?.()
+    if (lastBtn) {
+      lastBtn.hidden = !last
+      if (last) {
+        lastBtn.innerHTML = `${icons.receipt}<span>Suivre ma commande <strong>${esc(last.ref)}</strong><small>${esc(STATUS_LABEL[last.status] ?? '')}</small></span>${icons['arrow-right']}`
+      }
+    }
   }
+  lastBtn?.addEventListener('click', () => {
+    const last = getLastOrder?.()
+    if (last) onOpenLastOrder?.(last)
+  })
 
   list.addEventListener('click', (e) => {
     const row = e.target.closest('[data-index]')
@@ -75,6 +91,8 @@ export function initCartView({ onShowView } = {}) {
 
   function showView(name) {
     if (name === 'checkout' && !cart.lines.length) name = 'cart'
+    view = name
+    if (name === 'cart') render()
     views.forEach((v) => (v.hidden = v.dataset.view !== name))
     title.textContent = name === 'checkout' ? 'Validation' : name === 'done' ? 'Commande' : 'Ta commande'
     onShowView?.(name)
@@ -96,5 +114,5 @@ export function initCartView({ onShowView } = {}) {
   onOverlayChange(render)
   cart.subscribe(render)
   render()
-  return { showView }
+  return { showView, currentView: () => view, render }
 }

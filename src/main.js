@@ -11,7 +11,7 @@ import { PRODUCTS } from './data/menu.js'
 import { webglAvailable } from './ui/env.js'
 import { initSmoothScroll, scrollToTarget } from './ui/smooth.js'
 import { initNav } from './ui/nav.js'
-import { initReveals, initTilt, initJuiceParallax } from './ui/motion.js'
+import { initReveals, initTilt, initJuiceParallax, observeReveals } from './ui/motion.js'
 import { initMenu } from './ui/menu.js'
 import { cart } from './ui/store.js'
 import { initCartView } from './ui/cart-view.js'
@@ -19,7 +19,9 @@ import { initCustomize } from './ui/customize.js'
 import { initCheckout } from './ui/checkout.js'
 import { initStatus } from './ui/status.js'
 import { toast, flyToCart } from './ui/feedback.js'
-import { renderUrl } from './ui/renders.js'
+import { productImage } from './ui/renders.js'
+import { isOverlayOpen } from './ui/dialog.js'
+import { loadLiveMenu } from './ui/live-menu.js'
 
 document.querySelectorAll('[data-year]').forEach((el) => (el.textContent = new Date().getFullYear()))
 
@@ -27,23 +29,50 @@ initSmoothScroll()
 initNav()
 initStatus()
 
+// carte en direct (prix, photos, plats épuisés publiés depuis le tableau de bord)
+const liveMenu = loadLiveMenu().catch(() => false)
+const menuReady = Promise.race([liveMenu, new Promise((r) => setTimeout(r, 2500))])
+
 let checkout
-const { showView } = initCartView({ onShowView: (view) => checkout?.onShow(view) })
-checkout = initCheckout({ showView })
+const cartView = initCartView({
+  onShowView: (view) => checkout?.onShow(view),
+  getLastOrder: () => checkout?.lastOrder(),
+  onOpenLastOrder: (order) => checkout.showOrder(order),
+})
+const { showView } = cartView
 
 const added = (product, line, origin) => {
-  flyToCart(origin, renderUrl(product.category.model))
+  flyToCart(origin, productImage(product))
   toast(`${line.qty > 1 ? `${line.qty} x ` : ''}${product.fullName} ajouté au panier`)
 }
 const customize = initCustomize({ onAdded: added })
-const menu = initMenu({ logoUrl: logo512 })
+const menu = initMenu({ logoUrl: logo512, menuReady })
+
+function menuUpdated() {
+  menu.refresh()
+  observeReveals(document.querySelector('[data-bento]'))
+  const removed = cart.revalidate()
+  if (removed.length) {
+    const who = removed.length > 1 ? `${removed.length} articles ne sont plus disponibles` : `${removed[0]} n'est plus disponible`
+    toast(`${who}, panier mis à jour`, { icon: 'warning-circle', duration: 4200 })
+  }
+}
+liveMenu.then((changed) => changed && menuUpdated())
+
+checkout = initCheckout({
+  showView,
+  isVisible: (view) => isOverlayOpen() && cartView.currentView() === view,
+  // commande refusée (plat épuisé entre-temps…) : on recharge la carte
+  onMenuError: () => loadLiveMenu().then((changed) => changed && menuUpdated()),
+})
+cartView.render()
 
 // boutons "Ajouter" / "Choisir" partout dans la page
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-add]')
   if (!btn) return
   const product = PRODUCTS.get(btn.dataset.add)
-  if (!product) return
+  if (!product?.available) return
   if (product.hasOptions) {
     customize.open(product, btn)
   } else {

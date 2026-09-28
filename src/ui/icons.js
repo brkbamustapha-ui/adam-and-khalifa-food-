@@ -1,18 +1,8 @@
 // Icônes Phosphor (graisse "bold") utilisées dans l'interface générée en JavaScript.
-import plus from '@phosphor-icons/core/assets/bold/plus-bold.svg?raw'
-import minus from '@phosphor-icons/core/assets/bold/minus-bold.svg?raw'
-import trash from '@phosphor-icons/core/assets/bold/trash-bold.svg?raw'
-import check from '@phosphor-icons/core/assets/bold/check-bold.svg?raw'
-import storefront from '@phosphor-icons/core/assets/bold/storefront-bold.svg?raw'
-import motorcycle from '@phosphor-icons/core/assets/bold/motorcycle-bold.svg?raw'
+import set from 'virtual:icons:plus,minus,trash,check,storefront,motorcycle,sparkle,star,pepper,users-three,plus-circle,clock,x,whatsapp-logo,phone,receipt,arrow-right,warning-circle'
 
-const prep = (svg) => svg.trim().replace('<svg ', '<svg class="icon" aria-hidden="true" focusable="false" ')
+export const icons = set
 
-export const icons = {
-  plus: prep(plus),
-  minus: prep(minus),
-  trash: prep(trash),
-  check: prep(check),
-  storefront: prep(storefront),
-  motorcycle: prep(motorcycle),
-}
+/** Remplace les <i data-icon="nom"></i> des gabarits par le SVG (comme le fait le build pour le HTML). */
+export const hydrateIcons = (html) =>
+  html.replace(/<i data-icon="([\w-]+)"(?: data-weight="(\w+)")?><\/i>/g, (m, name, weight) => set[weight && weight !== 'bold' ? `${name}.${weight}` : name] ?? '')

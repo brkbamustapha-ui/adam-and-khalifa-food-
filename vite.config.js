@@ -43,13 +43,41 @@ function sitePlugin() {
   }
 }
 
+/**
+ * Module virtuel d'icônes pour le JavaScript : import icons from 'virtual:icons:plus,star.fill'
+ * donne { plus: '<svg…>', 'star.fill': '<svg…>' } (graisse "bold" par défaut).
+ */
+function iconsModule() {
+  const PREFIX = 'virtual:icons:'
+  return {
+    name: 'phosphor-icons-module',
+    resolveId: (id) => (id.startsWith(PREFIX) ? `\0${id}` : undefined),
+    load(id) {
+      if (!id.startsWith(`\0${PREFIX}`)) return
+      const out = {}
+      for (const key of id.slice(PREFIX.length + 1).split(',')) {
+        const [name, weight = 'bold'] = key.split('.')
+        out[key] = inlineIcon(name, weight)
+      }
+      return `export default ${JSON.stringify(out)}`
+    },
+  }
+}
+
+// API locale (npm run dev:api) : même code que la fonction Supabase, base en mémoire
+const api = { '/api': { target: 'http://localhost:8787', changeOrigin: false } }
+
 export default defineConfig({
   base: './',
-  plugins: [sitePlugin()],
+  plugins: [sitePlugin(), iconsModule()],
   build: {
     target: 'es2022',
     assetsInlineLimit: 0,
     chunkSizeWarningLimit: 900,
+    rollupOptions: {
+      input: { main: resolve('index.html'), admin: resolve('admin/index.html') },
+    },
   },
-  server: { host: true },
+  server: { host: true, proxy: api },
+  preview: { proxy: api },
 })

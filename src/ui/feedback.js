@@ -9,14 +9,14 @@ export function hideToast() {
 }
 
 /** Petite notification en bas de l'écran. */
-export function toast(message) {
+export function toast(message, { icon = 'check', duration = 2600 } = {}) {
   const el = document.querySelector('[data-toast]')
   if (!el) return
-  el.innerHTML = `${icons.check}<span></span>`
+  el.innerHTML = `${icons[icon] ?? icons.check}<span></span>`
   el.querySelector('span').textContent = message
   el.classList.add('is-shown')
   clearTimeout(timer)
-  timer = setTimeout(() => el.classList.remove('is-shown'), 2600)
+  timer = setTimeout(() => el.classList.remove('is-shown'), duration)
 }
 
 function bump() {

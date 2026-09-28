@@ -19,8 +19,11 @@ export const lineKey = (l) =>
 
 function isValid(l) {
   const p = PRODUCTS.get(l?.id)
-  if (!p) return false
+  if (!p || !p.available) return false
   if (p.sizes && !p.sizes.some((s) => s.label === l.size)) return false
+  if (p.choice && l.choice && !p.choice.options.includes(l.choice)) return false
+  if (p.pick && (l.picks ?? []).some((x) => !p.pick.options.includes(x))) return false
+  if ((l.supplements ?? []).some((id) => !p.category.supplements || !SUPPLEMENTS.some((s) => s.id === id))) return false
   return Number.isInteger(l.qty) && l.qty > 0 && l.qty < 100
 }
 
@@ -105,6 +108,15 @@ export const cart = {
   clear() {
     lines = []
     commit('clear')
+  },
+  /** Après une mise à jour de la carte : retire les articles qui n'existent plus ou sont épuisés. */
+  revalidate() {
+    const removed = lines.filter((l) => !isValid(l)).map((l) => PRODUCTS.get(l.id)?.fullName ?? 'Un article')
+    if (removed.length) {
+      lines = lines.filter(isValid)
+      commit('update')
+    } else listeners.forEach((fn) => fn('menu'))
+    return removed
   },
   subscribe(fn) {
     listeners.add(fn)

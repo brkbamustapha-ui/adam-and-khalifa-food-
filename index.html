@@ -6,7 +6,7 @@
     <title>Adam & Khalifa Food | Fast food à Bir El Djir, Oran</title>
     <meta
       name="description"
-      content="Pizzas, sandwichs, tacos, riz crousty, box et jus AK Juice à Bir El Djir, Oran. Découvre la carte en 3D et commande en ligne sur WhatsApp."
+      content="Pizzas, sandwichs, tacos, riz crousty, box et jus AK Juice à Bir El Djir, Oran. Découvre la carte en 3D et commande en ligne en quelques clics."
     />
     <meta name="theme-color" content="#121110" />
     <meta name="color-scheme" content="dark" />
@@ -18,7 +18,7 @@
     <meta property="og:locale" content="fr_DZ" />
     <meta property="og:site_name" content="Adam & Khalifa Food" />
     <meta property="og:title" content="Adam & Khalifa Food, fast food à Oran" />
-    <meta property="og:description" content="Pizzas, sandwichs, tacos, riz crousty et jus frais. La carte en 3D, la commande sur WhatsApp." />
+    <meta property="og:description" content="Pizzas, sandwichs, tacos, riz crousty et jus frais. La carte en 3D, la commande en ligne." />
     <meta property="og:image" content="og-image.jpg" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="preload" as="image" href="./src/assets/logo-512.webp" type="image/webp" />
@@ -81,7 +81,7 @@
               <span class="line"><span class="accent" data-hero-in style="--i: 1">Food</span></span>
             </h1>
             <p class="hero__lead" data-hero-in style="--i: 1">
-              Pizzas, sandwichs, tacos et riz crousty préparés minute. Compose ta commande et envoie-la sur WhatsApp.
+              Pizzas, sandwichs, tacos et riz crousty préparés minute. Compose ta commande en ligne, on la confirme en quelques minutes.
             </p>
             <div class="hero__ctas" data-hero-in style="--i: 2">
               <a class="btn btn--primary btn--lg" href="#menu">Commander<i data-icon="arrow-right"></i></a>
@@ -105,7 +105,7 @@
           <p class="section-lead" data-reveal>
             La pizza qui porte notre nom, le riz crousty qui pique, le sandwich Pro Max et la Méga à partager.
           </p>
-          <div class="bento">
+          <div class="bento" data-bento>
             <!-- @signatures -->
           </div>
         </div>
@@ -162,7 +162,7 @@
             <p class="section-lead" data-reveal>
               Jus frais, salades de fruits, gaufres et crêpes&nbsp;: de quoi finir ton repas sur une note sucrée.
             </p>
-            <ul class="picks" role="list" data-reveal>
+            <ul class="picks" role="list" data-reveal data-picks>
               <!-- @juice-picks -->
             </ul>
             <div class="juice__ctas" data-reveal>
@@ -196,7 +196,7 @@
               <span class="step__icon"><i data-icon="paper-plane-tilt"></i></span>
               <div>
                 <h3>Envoie</h3>
-                <p>Le récapitulatif part sur notre WhatsApp. Tu peux aussi appeler le {{phoneDisplay}}.</p>
+                <p>Ta commande arrive au restaurant, qui la confirme en quelques minutes. Tu suis sa confirmation en direct sur cette page.</p>
               </div>
             </li>
           </ol>
@@ -290,6 +290,7 @@
               <p class="cart-empty__title">Ton panier est vide</p>
               <p>Ajoute un plat depuis la carte pour commencer.</p>
               <a class="btn btn--primary" href="#menu" data-close>Voir la carte</a>
+              <button class="last-order" type="button" data-last-order hidden></button>
             </div>
           </div>
           <footer class="drawer__foot" data-cart-foot>
@@ -330,32 +331,28 @@
               </div>
               <div class="field">
                 <label for="c-note">Remarque <span class="optional">(facultatif)</span></label>
-                <textarea id="c-note" name="note" rows="2" placeholder="Ex : sans oignons, 2e étage, interphone B"></textarea>
+                <textarea id="c-note" name="note" rows="2" maxlength="300" placeholder="Ex : sans oignons, 2e étage, interphone B"></textarea>
               </div>
+              <div class="hp" aria-hidden="true">
+                <label>Site web <input name="website" type="text" tabindex="-1" autocomplete="off" /></label>
+              </div>
+              <p class="checkout__note"><i data-icon="shield-check"></i>Ta commande arrive directement au restaurant, qui la confirme en quelques minutes. Paiement à la livraison ou au retrait.</p>
             </div>
             <footer class="drawer__foot">
+              <p class="checkout__error" data-checkout-error role="alert" hidden></p>
+              <div class="checkout__fallback" data-fallback hidden>
+                <p>Le service de commande ne répond pas pour le moment. Envoie-la par WhatsApp, on la reçoit pareil.</p>
+                <button class="btn btn--primary btn--block" type="button" data-wa-fallback><i data-icon="whatsapp-logo"></i>Envoyer sur WhatsApp</button>
+              </div>
               <div class="sum"><span>Total</span><strong data-cart-total>0 DA</strong></div>
-              <button class="btn btn--primary btn--block btn--lg" type="submit"><i data-icon="whatsapp-logo"></i>Envoyer sur WhatsApp</button>
+              <button class="btn btn--primary btn--block btn--lg" type="submit" data-submit><i data-icon="paper-plane-tilt"></i><span>Envoyer la commande</span></button>
               <a class="btn btn--ghost btn--block" href="tel:{{phoneIntl}}"><i data-icon="phone"></i>Commander par téléphone</a>
             </footer>
           </form>
         </section>
 
         <section class="drawer__view" data-view="done" hidden>
-          <div class="drawer__body done" data-lenis-prevent>
-            <span class="done__icon"><i data-icon="check"></i></span>
-            <p class="done__title">C'est presque fini&nbsp;!</p>
-            <p>WhatsApp s'est ouvert avec ton récapitulatif. Appuie sur «&nbsp;Envoyer&nbsp;» pour nous transmettre la commande.</p>
-            <p class="done__ref">Référence&nbsp;: <strong data-order-ref></strong></p>
-            <p class="done__help">
-              Rien ne s'est ouvert&nbsp;? <a class="text-link" href="#" data-wa-retry target="_blank" rel="noopener">Réessayer</a> ou appelle le
-              <a class="text-link" href="tel:{{phoneIntl}}">{{phoneDisplay}}</a>.
-            </p>
-            <div class="done__actions">
-              <button class="btn btn--primary" type="button" data-new-order>Nouvelle commande</button>
-              <button class="btn btn--ghost" type="button" data-goto-view="cart">Revoir le panier</button>
-            </div>
-          </div>
+          <div class="drawer__body done" data-lenis-prevent data-done aria-live="polite"></div>
         </section>
       </aside>
     </div>

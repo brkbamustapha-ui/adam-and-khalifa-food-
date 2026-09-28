@@ -1,22 +1,18 @@
 import { SITE, waLink } from '../config.js'
 import { PRODUCTS, formatDA } from '../data/menu.js'
+import { normalizePhone } from '../../supabase/functions/ak-api/menu-core.js'
 import { cart, unitPrice, describeLine } from './store.js'
 import { closeOverlay } from './dialog.js'
 import { timeSlots } from './status.js'
 import { icons } from './icons.js'
 import { esc } from './env.js'
+import { api } from './api.js'
+import { initTracker, doneHTML } from './order-track.js'
+import { toast } from './feedback.js'
+
+export { normalizePhone }
 
 const CUSTOMER_KEY = 'ak-customer-v1'
-
-/** Numéros algériens : mobile (05, 06, 07), fixe (02, 03, 04), ou format international +213. */
-export function normalizePhone(raw) {
-  let d = String(raw).replace(/[^\d+]/g, '')
-  if (d.startsWith('+213')) d = `0${d.slice(4)}`
-  else if (d.startsWith('00213')) d = `0${d.slice(5)}`
-  else if (d.startsWith('213') && d.length === 12) d = `0${d.slice(3)}`
-  if (/^0[567]\d{8}$/.test(d) || /^0[234]\d{7,8}$/.test(d)) return d
-  return null
-}
 
 const prettyPhone = (d) => d.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})$/, '$1 $2 $3 $4')
 
@@ -50,13 +46,15 @@ export function buildMessage({ name, phone, mode, address, time, note, ref }) {
   ].join('\n')
 }
 
-export function initCheckout({ showView }) {
+export function initCheckout({ showView, isVisible, onMenuError }) {
   const form = document.querySelector('[data-checkout]')
   const modesEl = form.querySelector('[data-modes]')
   const addressField = form.querySelector('[data-address-field]')
   const timeEl = form.querySelector('[data-time]')
-  const refEl = document.querySelector('[data-order-ref]')
-  const retry = document.querySelector('[data-wa-retry]')
+  const submitBtn = form.querySelector('[data-submit]')
+  const errorEl = form.querySelector('[data-checkout-error]')
+  const fallbackEl = form.querySelector('[data-fallback]')
+  const doneEl = document.querySelector('[data-done]')
 
   modesEl.innerHTML = SITE.orderModes
     .map(
@@ -92,6 +90,10 @@ export function initCheckout({ showView }) {
     if (out) out.textContent = message || ''
     if (input instanceof Element) input.setAttribute('aria-invalid', message ? 'true' : 'false')
   }
+  const formError = (message) => {
+    errorEl.textContent = message || ''
+    errorEl.hidden = !message
+  }
   form.addEventListener('input', (e) => {
     if (VALIDATED.includes(e.target.name)) setError(e.target.name, '')
   })
@@ -104,39 +106,26 @@ export function initCheckout({ showView }) {
     if ([...timeEl.options].some((o) => o.value === current)) timeEl.value = current
   }
 
-  form.addEventListener('submit', (e) => {
-    e.preventDefault()
-    if (!cart.lines.length) return showView('cart')
-    const name = form.elements.name.value.trim()
-    const phone = normalizePhone(form.elements.phone.value)
-    const mode = form.elements.mode.value
-    const address = form.elements.address.value.trim()
-    const errors = []
-    if (name.length < 2) errors.push(['name', 'Indique ton prénom.'])
-    if (!phone) errors.push(['phone', 'Numéro invalide. Exemple\u00a0: 0550 12 34 56.'])
-    if (needsAddress() && address.length < 6) errors.push(['address', 'Indique ton adresse (quartier, rue, repère).'])
-    VALIDATED.forEach((f) => setError(f, ''))
-    if (errors.length) {
-      errors.forEach(([f, m]) => setError(f, m))
-      form.elements[errors[0][0]].focus()
-      return
-    }
+  // --- confirmation et suivi -------------------------------------------------------------
+  const tracker = initTracker({
+    onUpdate(order, changed) {
+      if (tracker?.current?.id === order.id && doneEl.dataset.order === order.id) doneEl.innerHTML = doneHTML(order)
+      if (changed && !isVisible('done')) {
+        toast(order.status === 'confirmed' ? `Commande ${order.ref} confirmée, on la prépare !` : `Commande ${order.ref} non acceptée, appelle-nous.`)
+      }
+    },
+  })
+
+  function showOrder(order) {
+    doneEl.dataset.order = order.id
+    doneEl.innerHTML = doneHTML(order)
+    showView('done')
+  }
+
+  let lastWhatsApp = null
+  function sendWhatsApp(details) {
     const ref = orderRef()
-    const message = buildMessage({
-      name,
-      phone,
-      mode,
-      address,
-      time: timeEl.value,
-      note: form.elements.note.value.trim(),
-      ref,
-    })
-    const url = waLink(message)
-    try {
-      localStorage.setItem(CUSTOMER_KEY, JSON.stringify({ name, phone: form.elements.phone.value.trim(), mode, address }))
-    } catch {
-      /* ignoré */
-    }
+    const url = waLink(buildMessage({ ...details, ref }))
     // nouvel onglet (ou l'application WhatsApp sur mobile) ; si le navigateur bloque, on y va directement
     const win = window.open(url, '_blank')
     if (win) {
@@ -148,21 +137,98 @@ export function initCheckout({ showView }) {
     } else {
       window.location.href = url
     }
-    refEl.textContent = ref
-    retry.href = url
-    showView('done')
+    showOrder({ id: `wa-${ref}`, channel: 'whatsapp', ref, waUrl: url })
+  }
+
+  function setBusy(busy) {
+    submitBtn.disabled = busy
+    submitBtn.classList.toggle('is-busy', busy)
+    submitBtn.querySelector('span').textContent = busy ? 'Envoi en cours…' : 'Envoyer la commande'
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    if (submitBtn.disabled) return
+    if (!cart.lines.length) return showView('cart')
+    const name = form.elements.name.value.trim()
+    const phone = normalizePhone(form.elements.phone.value)
+    const mode = form.elements.mode.value
+    const address = form.elements.address.value.trim()
+    const errors = []
+    if (name.length < 2) errors.push(['name', 'Indique ton prénom.'])
+    if (!phone) errors.push(['phone', 'Numéro invalide. Exemple\u00a0: 0550 12 34 56.'])
+    if (needsAddress() && address.length < 6) errors.push(['address', 'Indique ton adresse (quartier, rue, repère).'])
+    VALIDATED.forEach((f) => setError(f, ''))
+    formError('')
+    fallbackEl.hidden = true
+    if (errors.length) {
+      errors.forEach(([f, m]) => setError(f, m))
+      form.elements[errors[0][0]].focus()
+      return
+    }
+    const details = { name, phone, mode, address, time: timeEl.value, note: form.elements.note.value.trim() }
+    try {
+      localStorage.setItem(CUSTOMER_KEY, JSON.stringify({ name, phone: form.elements.phone.value.trim(), mode, address }))
+    } catch {
+      /* ignoré */
+    }
+
+    setBusy(true)
+    const res = await api('/orders', {
+      method: 'POST',
+      timeout: 15000,
+      body: {
+        customer: details,
+        website: form.elements.website.value,
+        lines: cart.lines.map(({ id, qty, size, choice, picks, supplements, note }) => ({ id, qty, size, choice, picks, supplements, note })),
+      },
+    })
+    setBusy(false)
+
+    if (res.ok) {
+      const order = { id: res.data.id, token: res.data.token, ref: res.data.ref, total: res.data.total, status: res.data.status, mode, createdAt: res.data.createdAt }
+      cart.clear()
+      form.elements.note.value = ''
+      tracker.start(order)
+      showOrder(order)
+      return
+    }
+    if (res.status >= 400 && res.status < 500 && res.error) {
+      // commande refusée par le serveur (plat épuisé, numéro invalide…) : on explique
+      formError(res.error)
+      if (res.status === 400) onMenuError?.()
+      return
+    }
+    // service injoignable : la commande peut toujours partir par WhatsApp
+    lastWhatsApp = details
+    fallbackEl.hidden = false
+    fallbackEl.querySelector('button')?.focus()
   })
 
-  document.querySelector('[data-new-order]')?.addEventListener('click', () => {
-    cart.clear()
-    form.elements.note.value = ''
+  fallbackEl.querySelector('[data-wa-fallback]').addEventListener('click', () => {
+    if (lastWhatsApp) sendWhatsApp(lastWhatsApp)
+  })
+
+  doneEl.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-new-order]')) return
+    if (tracker.current?.channel === 'whatsapp' || doneEl.dataset.order?.startsWith('wa-')) {
+      cart.clear()
+      form.elements.note.value = ''
+    }
     closeOverlay('cart')
     showView('cart')
   })
 
   return {
     onShow(view) {
-      if (view === 'checkout') fillTimes()
+      if (view === 'checkout') {
+        fillTimes()
+        formError('')
+        fallbackEl.hidden = true
+      }
     },
+    /** Dernière commande encore suivie (affichée dans le panier vide). */
+    lastOrder: () => tracker.current,
+    showOrder,
   }
 }
