@@ -33,6 +33,7 @@ const STATUSES = ['pending', 'confirmed', 'rejected']
 const SESSION_HOURS = 12
 const REMEMBER_DAYS = 30
 const LOGIN_WINDOW_MIN = 15
+const ADMIN_CACHE_MS = 15000
 const UPLOAD_TYPES = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png' }
 const MAX_PHOTO = 3 * 1024 * 1024
 const DAY = 86400000
@@ -139,10 +140,28 @@ export function createHandler({ db, basePath = '', imageBase = '', log = console
     return { token, username: admin.username, expiresAt: new Date(exp * 1000).toISOString() }
   }
 
+  // compte gérant gardé 15 s en mémoire : une requête SQL de moins par appel du tableau de bord
+  // (une session révoquée ailleurs reste donc valable au plus 15 s)
+  const admins = new Map()
+  async function loadAdmin(id, fresh = false) {
+    const hit = admins.get(id)
+    if (!fresh && hit && Date.now() - hit.at < ADMIN_CACHE_MS) return hit.admin
+    const admin = await db.getAdminById(id)
+    if (admin) admins.set(id, { admin, at: Date.now() })
+    else admins.delete(id)
+    return admin
+  }
+  async function saveAdmin(id, patch) {
+    const admin = await db.updateAdmin(id, patch)
+    admins.set(id, { admin, at: Date.now() })
+    return admin
+  }
+
   async function authenticate(req) {
     const payload = await verifyToken(req.headers.get('x-admin-token'), await secret())
     if (!payload || typeof payload.exp !== 'number' || payload.exp * 1000 < Date.now() || !UUID_RE.test(payload.sub ?? '')) return null
-    const admin = await db.getAdminById(payload.sub)
+    let admin = await loadAdmin(payload.sub)
+    if (admin && admin.token_version !== payload.v) admin = await loadAdmin(payload.sub, true)
     if (!admin || admin.token_version !== payload.v) return null
     return { admin, remember: payload.r === 1 }
   }
@@ -173,7 +192,9 @@ export function createHandler({ db, basePath = '', imageBase = '', log = console
     if (!lines.length) throw new HttpError(400, 'Ton panier est vide.')
     if (lines.length > 40) throw new HttpError(400, '40 lignes maximum par commande.')
 
-    const stored = await db.getMenu()
+    const ih = await ipHash(req)
+    const [stored, recent] = await Promise.all([db.getMenu(), db.countOrders({ ipHash: ih, since: new Date(Date.now() - 10 * 60 * 1000) })])
+    if (recent >= 6) throw new HttpError(429, 'Trop de commandes envoyées. Réessaie dans quelques minutes ou appelle-nous.')
     if (!stored?.data) throw new HttpError(503, 'Carte indisponible, réessaie dans un instant.')
     const menu = buildMenu(stored.data)
     let total = 0
@@ -187,10 +208,6 @@ export function createHandler({ db, basePath = '', imageBase = '', log = console
       return { ...line, name: product.fullName, category: product.category.name, qty, unit, lineTotal: unit * qty, details: describeLine(menu, line) }
     })
     if (count > 60) throw new HttpError(400, '60 articles maximum par commande.')
-
-    const ih = await ipHash(req)
-    const recent = await db.countOrders({ ipHash: ih, since: new Date(Date.now() - 10 * 60 * 1000) })
-    if (recent >= 6) throw new HttpError(429, 'Trop de commandes envoyées. Réessaie dans quelques minutes ou appelle-nous.')
 
     let order = null
     for (let attempt = 0; attempt < 5 && !order; attempt++) {
@@ -233,12 +250,12 @@ export function createHandler({ db, basePath = '', imageBase = '', log = console
     const password = String(body.password ?? '')
     const ih = await ipHash(req)
     const since = new Date(Date.now() - LOGIN_WINDOW_MIN * 60 * 1000)
-    const [ipFails, userFails] = await Promise.all([
+    const [ipFails, userFails, admin] = await Promise.all([
       db.countLoginFailures({ ipHash: ih, since }),
       username ? db.countLoginFailures({ username, since }) : 0,
+      username ? db.getAdminByUsername(username) : null,
     ])
     if (ipFails >= 5 || userFails >= 20) throw new HttpError(429, `Trop de tentatives. Réessaie dans ${LOGIN_WINDOW_MIN} minutes.`)
-    const admin = username ? await db.getAdminByUsername(username) : null
     dummyHash ??= await hashPassword(randomToken(12))
     const ok = await verifyPassword(password, admin?.password_hash ?? dummyHash)
     const success = Boolean(admin && ok)
@@ -249,8 +266,9 @@ export function createHandler({ db, basePath = '', imageBase = '', log = console
   }
 
   // --- administration --------------------------------------------------------------------------------
-  async function updateAccount(req, { admin, remember }) {
+  async function updateAccount(req, { admin: cached, remember }) {
     const body = await readJson(req, 4000)
+    const admin = await loadAdmin(cached.id, true)
     if (!(await verifyPassword(String(body.currentPassword ?? ''), admin.password_hash))) {
       throw new HttpError(403, 'Mot de passe actuel incorrect.')
     }
@@ -271,7 +289,7 @@ export function createHandler({ db, basePath = '', imageBase = '', log = console
     }
     if (!Object.keys(patch).length) throw new HttpError(400, 'Aucune modification à enregistrer.')
     patch.token_version = admin.token_version + 1
-    const updated = await db.updateAdmin(admin.id, patch)
+    const updated = await saveAdmin(admin.id, patch)
     return json(await issueToken(updated, remember))
   }
 
@@ -391,7 +409,8 @@ export function createHandler({ db, basePath = '', imageBase = '', log = console
     if (m === 'GET' && path === '/admin/me') return json({ username: session.admin.username })
     if (m === 'POST' && path === '/admin/account') return updateAccount(req, session)
     if (m === 'POST' && path === '/admin/logout-all') {
-      await db.updateAdmin(session.admin.id, { token_version: session.admin.token_version + 1 })
+      const admin = await loadAdmin(session.admin.id, true)
+      await saveAdmin(admin.id, { token_version: admin.token_version + 1 })
       return json(null, 204)
     }
     if (m === 'GET' && path === '/admin/pulse') {
