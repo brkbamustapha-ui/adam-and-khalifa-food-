@@ -20,12 +20,12 @@ export const BRANDS = ['food', 'juice']
 
 export class MenuError extends Error {}
 
-export const formatDA = (n) => `${Math.round(Number(n) || 0).toLocaleString('fr-FR').replace(/ | /g, ' ')} DA`
+export const formatDA = (n) => `${Math.round(Number(n) || 0).toLocaleString('fr-FR').replace(/\u202f|\u00a0/g, ' ')} DA`
 
 export const slugify = (s) =>
   String(s ?? '')
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '')
@@ -86,12 +86,12 @@ export function describeLine(menu, line) {
   const out = []
   if (line.size) out.push(`Taille ${line.size}`)
   if (line.choice) out.push(line.choice)
-  if (line.picks?.length) out.push(`Parfums : ${line.picks.join(', ')}`)
+  if (line.picks?.length) out.push(`Parfums\u00a0: ${line.picks.join(', ')}`)
   if (line.supplements?.length) {
     const labels = line.supplements.map((id) => menu.supplements.find((s) => s.id === id)?.label.toLowerCase() ?? id)
     out.push(`Suppl. ${labels.join(', ')}`)
   }
-  if (line.note) out.push(`« ${line.note} »`)
+  if (line.note) out.push(`«\u00a0${line.note}\u00a0»`)
   return out
 }
 

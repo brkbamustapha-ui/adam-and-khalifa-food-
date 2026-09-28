@@ -315,7 +315,7 @@ export function createHandler({ db, basePath = '', imageBase = '', log = console
       const articles = (o.items ?? []).map((i) => `${i.qty} x ${i.name}`).join(' | ')
       lines.push([o.ref, fmt.format(new Date(o.created_at)), label[o.status] ?? o.status, o.customer_name, o.customer_phone, ORDER_MODES[o.mode]?.label ?? o.mode, articles, o.total].map(esc).join(';'))
     }
-    return new Response(`﻿${lines.join('\r\n')}`, {
+    return new Response(`\uFEFF${lines.join('\r\n')}`, {
       headers: {
         'content-type': 'text/csv; charset=utf-8',
         'content-disposition': 'attachment; filename="commandes-adam-khalifa.csv"',

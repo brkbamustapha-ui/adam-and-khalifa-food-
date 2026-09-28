@@ -4,6 +4,17 @@ import { renderUrl } from './renders.js'
 import { hydrateIcons } from './icons.js'
 import { api } from './api.js'
 
+/** Sérialisation indépendante de l'ordre des clés (Postgres réordonne les clés du JSON). */
+const canonical = (v) =>
+  Array.isArray(v)
+    ? `[${v.map(canonical).join(',')}]`
+    : v && typeof v === 'object'
+      ? `{${Object.keys(v)
+          .sort()
+          .map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`)
+          .join(',')}}`
+      : JSON.stringify(v)
+
 /**
  * Carte en direct : le HTML est généré au build avec la carte de départ, puis la carte
  * publiée depuis le tableau de bord (prix, photos, plats épuisés…) la remplace au chargement.
@@ -12,7 +23,7 @@ import { api } from './api.js'
 export async function loadLiveMenu() {
   const res = await api('/menu', { timeout: 8000 })
   const doc = res.ok ? res.data.menu : null
-  if (!doc?.categories?.length || JSON.stringify(doc) === JSON.stringify(MENU_DOC)) return false
+  if (!doc?.categories?.length || canonical(doc) === canonical(MENU_DOC)) return false
   try {
     applyMenu(doc)
   } catch (err) {
