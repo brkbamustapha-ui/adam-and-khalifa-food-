@@ -4,12 +4,17 @@ export const coarsePointer = window.matchMedia('(pointer: coarse)').matches
 export const esc = (s = '') =>
   String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 
+/**
+ * WebGL 2 présent ? Simple test de l'API : créer un contexte juste pour vérifier coûte cher
+ * au démarrage. Si la création échoue ensuite, le site garde ses images.
+ */
 export function webglAvailable() {
+  if (typeof window.WebGL2RenderingContext === 'undefined') return false
   try {
-    const c = document.createElement('canvas')
-    return Boolean(window.WebGL2RenderingContext && c.getContext('webgl2'))
+    // rendu sans carte graphique déjà constaté pendant cette visite (voir three/core.js)
+    return sessionStorage.getItem('ak-3d') !== 'off' || new URLSearchParams(location.search).has('3d')
   } catch {
-    return false
+    return true
   }
 }
 

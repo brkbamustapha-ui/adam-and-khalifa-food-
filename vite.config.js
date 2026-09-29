@@ -64,12 +64,32 @@ function iconsModule() {
   }
 }
 
+/**
+ * Précharge les deux polices (titres et texte) dès la lecture du HTML : les titres s'affichent
+ * directement dans la bonne police, sans saut visible quand elle arrive.
+ */
+function fontPreload() {
+  return {
+    name: 'font-preload',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, ctx) {
+        if (!ctx.bundle) return html
+        const base = ctx.path.includes('/admin/') ? '../' : './'
+        return Object.values(ctx.bundle)
+          .filter((f) => f.type === 'asset' && /^assets\/(bebas-neue-latin-400-normal|outfit-latin-wght-normal)-.*\.woff2$/.test(f.fileName))
+          .map((f) => ({ tag: 'link', attrs: { rel: 'preload', as: 'font', type: 'font/woff2', href: base + f.fileName, crossorigin: '' }, injectTo: 'head' }))
+      },
+    },
+  }
+}
+
 // API locale (npm run dev:api) : même code que la fonction Supabase, base en mémoire
 const api = { '/api': { target: 'http://localhost:8787', changeOrigin: false } }
 
 export default defineConfig({
   base: './',
-  plugins: [sitePlugin(), iconsModule()],
+  plugins: [sitePlugin(), iconsModule(), fontPreload()],
   build: {
     target: 'es2022',
     assetsInlineLimit: 0,

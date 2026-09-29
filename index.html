@@ -23,7 +23,6 @@
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="preload" as="image" href="./src/assets/logo-512.webp" type="image/webp" />
     <!-- @jsonld -->
-    <noscript><style>.hero__fallback { display: block !important; }</style></noscript>
   </head>
   <body>
     <a class="skip-link" href="#menu">Aller directement à la carte</a>
@@ -72,7 +71,7 @@
       <!-- Héros 3D ------------------------------------------------------------------>
       <section class="hero" id="accueil" aria-labelledby="hero-title">
         <canvas class="hero__canvas" data-hero-canvas aria-hidden="true"></canvas>
-        <img class="hero__fallback" src="./src/assets/logo-512.webp" width="512" height="512" alt="" aria-hidden="true" />
+        <div class="hero__logo" aria-hidden="true"><img src="./src/assets/logo-512.webp" width="512" height="512" alt="" fetchpriority="high" /></div>
         <div class="hero__content container">
           <div class="hero__text">
             <p class="eyebrow" data-hero-in style="--i: 0">Fast food · Bir El Djir, Oran</p>

@@ -269,33 +269,96 @@
   height: 100%;
   z-index: -1;
   opacity: 0;
-  transition: opacity 1.2s var(--ease);
+  transition: opacity 0.6s var(--ease);
 }
 .hero.is-3d .hero__canvas {
   opacity: 1;
 }
-.hero__fallback {
-  display: none;
+/*
+ * Logo affiché dès le premier affichage, à la place exacte du médaillon 3D (voir src/ui/hero-layout.js).
+ * Quand la 3D est prête, elle apparaît en dessous puis le logo s'efface : le passage est invisible.
+ */
+.hero {
+  --md: min(44dvh, 28vw); /* valeurs d'attente, précisées en JavaScript */
+  --mx: 70%;
+  --my: 54.5%;
+}
+.hero__logo {
   position: absolute;
   z-index: -1;
-  top: 50%;
-  right: max(6vw, calc((100vw - var(--maxw)) / 2 + 20px));
-  width: min(40vw, 500px);
-  height: auto;
+  left: var(--mx);
+  top: var(--my);
+  width: calc(var(--md) * 1.06);
+  aspect-ratio: 1;
+  padding: calc(var(--md) * 0.034);
   border-radius: 50%;
-  box-shadow:
-    0 0 0 10px rgb(255 244 230 / 0.9),
-    0 40px 100px -20px rgb(255 106 0 / 0.55);
-  transform: translateY(-50%);
-  animation: float 6s ease-in-out infinite;
-  transition: opacity 0.8s;
+  background: #fff3e2;
+  box-shadow: inset 0 -3px 8px rgb(120 60 10 / 0.25);
+  translate: -50% -50%;
+  pointer-events: none;
+  /* « backwards » : une fois l'entrée finie, l'opacité redevient libre pour le fondu vers la 3D */
+  animation: logo-in 0.9s var(--ease) backwards;
+  transition:
+    opacity 0.6s var(--ease) 0.45s,
+    visibility 0s linear 1.05s;
 }
-.no-webgl .hero__fallback {
+/* halo du logo, immobile : un grand dégradé sur un calque qui bouge s'affiche en carreaux sur téléphone */
+.hero::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: var(--mx);
+  top: var(--my);
+  width: calc(var(--md) * 2.44);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  /* lueur sous le logo (profil d'une ombre floue décalée de 40px), puis halo large */
+  background:
+    radial-gradient(
+      circle at 50% calc(50% + 40px),
+      rgb(255 106 0 / 0.5) calc(var(--md) * 0.53 - 74px),
+      rgb(255 106 0 / 0.3) calc(var(--md) * 0.53 - 24px),
+      rgb(255 106 0 / 0.1) calc(var(--md) * 0.53 + 26px),
+      transparent calc(var(--md) * 0.53 + 90px)
+    ),
+    radial-gradient(closest-side, rgb(255 106 0 / 0.3), transparent);
+  pointer-events: none;
+  animation: fade-in 0.9s var(--ease) backwards;
+  transition: opacity 0.6s var(--ease) 0.45s;
+}
+.hero.is-3d::before {
+  opacity: 0;
+}
+.hero__logo img {
   display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+.hero.is-3d .hero__logo {
+  opacity: 0;
+  visibility: hidden;
+}
+.no-webgl .hero__logo {
+  animation:
+    logo-in 0.9s var(--ease) backwards,
+    float 6s ease-in-out 0.9s infinite;
+}
+@keyframes logo-in {
+  from {
+    opacity: 0;
+    scale: 0.92;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
 }
 @keyframes float {
   50% {
-    transform: translateY(calc(-50% - 16px)) rotate(-3deg);
+    translate: -50% calc(-50% - 14px);
+    rotate: -3deg;
   }
 }
 .hero__content {
@@ -352,23 +415,13 @@
   .hero__ctas .btn {
     flex: 1 1 auto;
   }
-  .hero__fallback {
-    top: calc(var(--nav-h) + 4vh);
-    left: 50%;
-    right: auto;
-    width: min(62vw, 340px);
-    transform: translateX(-50%);
-    animation-name: float-portrait;
-  }
   .hero {
+    --md: min(54vw, 28dvh);
+    --mx: 50%;
+    --my: 30%;
     background:
       radial-gradient(80% 45% at 50% 28%, rgb(255 106 0 / 0.26), transparent 70%),
       radial-gradient(120% 90% at 50% 0%, #1b1816, var(--bg) 70%);
-  }
-}
-@keyframes float-portrait {
-  50% {
-    transform: translate(-50%, -12px) rotate(-3deg);
   }
 }
 

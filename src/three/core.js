@@ -15,16 +15,19 @@ export const coarsePointer = window.matchMedia('(pointer: coarse)').matches
 export const lowPower =
   (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4 || window.innerWidth < 700
 
-export function webglAvailable() {
-  try {
-    const c = document.createElement('canvas')
-    return Boolean(window.WebGL2RenderingContext && c.getContext('webgl2'))
-  } catch {
-    return false
-  }
+// ?3d dans l'adresse force la 3D même sans carte graphique (tests)
+const FORCE_3D = new URLSearchParams(location.search).has('3d')
+
+/** Rendu sans carte graphique (SwiftShader, llvmpipe…) : la 3D y serait saccadée. */
+function softwareRendering(gl) {
+  const info = gl.getExtension('WEBGL_debug_renderer_info')
+  const name = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? '')
+  return /swiftshader|llvmpipe|softpipe|software|basic render/i.test(name)
 }
 
+let software = false
 export function createRenderer(canvas) {
+  if (software) throw new Error('Pas de carte graphique : les images remplacent la 3D.')
   const renderer = new WebGLRenderer({
     canvas,
     antialias: true,
@@ -32,6 +35,17 @@ export function createRenderer(canvas) {
     powerPreference: 'high-performance',
     preserveDrawingBuffer: false,
   })
+  if (!FORCE_3D && softwareRendering(renderer.getContext())) {
+    renderer.dispose()
+    renderer.forceContextLoss() // rend tout de suite la mémoire du contexte
+    software = true
+    try {
+      sessionStorage.setItem('ak-3d', 'off') // pas de nouvel essai pendant la visite
+    } catch {
+      /* stockage indisponible */
+    }
+    throw new Error('Pas de carte graphique : les images remplacent la 3D.')
+  }
   renderer.outputColorSpace = SRGBColorSpace
   renderer.toneMapping = NeutralToneMapping
   renderer.toneMappingExposure = 1
@@ -82,6 +96,39 @@ export function loadLogo(url) {
 
 export function loadTexture(url) {
   return new TextureLoader().loadAsync(url)
+}
+
+/** Laisse le navigateur respirer entre deux étapes lourdes (affichage, défilement, clics). */
+export const idle = () =>
+  new Promise((resolve) => (window.requestIdleCallback ? requestIdleCallback(() => resolve(), { timeout: 120 }) : setTimeout(resolve, 16)))
+export const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()))
+
+/**
+ * Prépare les shaders d'une scène encore masquée, sans figer la page.
+ * Si le navigateur compile en parallèle (KHR_parallel_shader_compile), compileAsync suffit.
+ * Sinon, la scène est dessinée par petits groupes d'objets avec une pause entre chaque :
+ * chaque compilation reste courte au lieu d'un long blocage au premier affichage.
+ */
+export async function warmUp(renderer, scene, camera) {
+  if (renderer.extensions.has('KHR_parallel_shader_compile')) {
+    await renderer.compileAsync(scene, camera)
+    return
+  }
+  const objects = []
+  scene.traverse((o) => o.material && objects.push(o))
+  const saved = objects.map((o) => [o.visible, o.frustumCulled])
+  objects.forEach((o) => (o.visible = false))
+  for (let i = 0; i < objects.length; i += 6) {
+    const batch = objects.slice(i, i + 6)
+    batch.forEach((o, k) => {
+      o.visible = saved[i + k][0]
+      o.frustumCulled = false
+    })
+    renderer.render(scene, camera)
+    batch.forEach((o) => (o.visible = false))
+    await idle()
+  }
+  objects.forEach((o, k) => ([o.visible, o.frustumCulled] = saved[k]))
 }
 
 /** Attend que la police d'affichage soit prête (pour les textes dessinés en canvas). */

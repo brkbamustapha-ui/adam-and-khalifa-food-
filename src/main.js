@@ -9,6 +9,7 @@ import logo512 from './assets/logo-512.webp'
 import logo1024 from './assets/logo-1024.webp'
 import { PRODUCTS } from './data/menu.js'
 import { webglAvailable } from './ui/env.js'
+import { medallionRect } from './ui/hero-layout.js'
 import { initSmoothScroll, scrollToTarget } from './ui/smooth.js'
 import { initNav } from './ui/nav.js'
 import { initReveals, initTilt, initJuiceParallax, observeReveals } from './ui/motion.js'
@@ -93,8 +94,18 @@ initReveals()
 initTilt()
 initJuiceParallax()
 
-// héros 3D : three.js est chargé à part, une fois la page affichée et le texte animé
+// héros : le logo s'affiche tout de suite en image, exactement là où le médaillon 3D apparaîtra
 const hero = document.querySelector('.hero')
+const placeLogo = () => {
+  const r = medallionRect(hero.clientWidth, hero.clientHeight)
+  hero.style.setProperty('--mx', `${r.x.toFixed(1)}px`)
+  hero.style.setProperty('--my', `${r.y.toFixed(1)}px`)
+  hero.style.setProperty('--md', `${r.d.toFixed(1)}px`)
+}
+placeLogo()
+new ResizeObserver(placeLogo).observe(hero)
+
+// puis la scène 3D (three.js, chargé à part) se construit sans bloquer la page et prend le relais en fondu
 const startHero = () =>
   import('./three/hero.js')
     .then(({ initHero }) =>
@@ -108,10 +119,8 @@ const startHero = () =>
     )
     .catch((err) => {
       document.documentElement.classList.add('no-webgl')
-      console.warn('Héros 3D indisponible :', err)
+      console.warn('Héros 3D indisponible, logo en image :', err)
     })
 if (!webglAvailable()) document.documentElement.classList.add('no-webgl')
-else {
-  if ('requestIdleCallback' in window) requestIdleCallback(startHero, { timeout: 900 })
-  else setTimeout(startHero, 300)
-}
+else if ('requestIdleCallback' in window) requestIdleCallback(startHero, { timeout: 400 })
+else setTimeout(startHero, 200)

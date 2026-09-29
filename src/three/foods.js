@@ -7,7 +7,6 @@ import {
   Vector3,
   Vector2,
   MeshStandardMaterial,
-  MeshPhysicalMaterial,
   DoubleSide,
   BackSide,
   CylinderGeometry,
@@ -108,14 +107,13 @@ const M = {
   grape: () => mat('grape', () => std({ color: '#5b2356', roughness: 0.2 })),
   glass: () =>
     mat('glass', () =>
-      new MeshPhysicalMaterial({
+      new MeshStandardMaterial({
         color: '#fff8f0',
         transparent: true,
-        opacity: 0.14,
-        roughness: 0.05,
+        opacity: 0.16,
+        roughness: 0.04,
         metalness: 0,
-        clearcoat: 1,
-        clearcoatRoughness: 0.05,
+        envMapIntensity: 1.6,
         side: DoubleSide,
         depthWrite: false,
       }),
@@ -123,7 +121,7 @@ const M = {
   juice: () => mat('juice', () => std({ color: '#ff7f0a', roughness: 0.15, emissive: '#ff4d00', emissiveIntensity: 0.28 })),
   ice: () =>
     mat('ice', () =>
-      new MeshPhysicalMaterial({ color: '#ffffff', transparent: true, opacity: 0.45, roughness: 0.1, clearcoat: 1, depthWrite: false }),
+      new MeshStandardMaterial({ color: '#ffffff', transparent: true, opacity: 0.45, roughness: 0.08, envMapIntensity: 1.5, depthWrite: false }),
     ),
   onion: () => mat('onion', () => std({ color: '#a8457c', roughness: 0.35 })),
   onionIn: () => mat('onionIn', () => std({ color: '#f4e4ef', roughness: 0.4 })),

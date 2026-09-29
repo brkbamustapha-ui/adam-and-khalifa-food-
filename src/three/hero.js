@@ -13,7 +13,6 @@ import {
   CircleGeometry,
   PlaneGeometry,
   TorusGeometry,
-  MeshPhysicalMaterial,
   MeshStandardMaterial,
   MeshBasicMaterial,
   PointLight,
@@ -40,7 +39,11 @@ import {
   reducedMotion,
   lowPower,
   coarsePointer,
+  idle,
+  nextFrame,
+  warmUp,
 } from './core.js'
+import { medallionRect } from '../ui/hero-layout.js'
 import { circleTextTexture, coinBackTexture, glowTexture } from './textures.js'
 import {
   normalize,
@@ -65,14 +68,16 @@ function buildMedallion(logoTex, maxAniso) {
   const g = new Group()
   const R = 1
   const T = 0.17
+  // matériaux « standard » brillants plutôt que « physical + vernis » : même rendu à cette taille,
+  // shader bien plus léger à compiler (c'était l'essentiel de l'attente au chargement)
   const edge = new Mesh(
     new CylinderGeometry(R, R, T, 160, 1, true),
-    new MeshPhysicalMaterial({ color: '#f07a12', roughness: 0.3, metalness: 0.2, clearcoat: 1, clearcoatRoughness: 0.18 }),
+    new MeshStandardMaterial({ color: '#f07a12', roughness: 0.2, metalness: 0.25, envMapIntensity: 1.3 }),
   )
   edge.rotation.x = PI / 2
   g.add(edge)
 
-  const rimMat = new MeshPhysicalMaterial({ color: '#fff3e2', roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.1 })
+  const rimMat = new MeshStandardMaterial({ color: '#fff3e2', roughness: 0.16, envMapIntensity: 1.3 })
   for (const s of [1, -1]) {
     const rim = new Mesh(new TorusGeometry(R, 0.05, 24, 180), rimMat)
     rim.position.z = (s * T) / 2
@@ -135,9 +140,15 @@ function itemDefs(logo) {
   ]
 }
 
+/**
+ * Le logo est déjà affiché en image au même endroit : la scène 3D se construit par petites étapes
+ * (la page reste fluide), ses shaders sont compilés en arrière-plan, puis elle remplace l'image
+ * en fondu et les aliments, le texte circulaire et les braises entrent en scène.
+ */
 export async function initHero({ section, canvas, logoUrl, logoTexUrl, onReady }) {
   const renderer = createRenderer(canvas)
   const scene = new Scene()
+  await idle()
   scene.environment = studioEnvironment(renderer)
   scene.environmentIntensity = ENV_INTENSITY + 0.15
   addStudioLights(scene, { rim: 2.4 })
@@ -147,8 +158,8 @@ export async function initHero({ section, canvas, logoUrl, logoTexUrl, onReady }
   const camera = new PerspectiveCamera(32, 1, 0.1, 60)
   camera.position.set(0, 0, 10)
 
-  await fontsReady()
-  const [logo, logoTex] = await Promise.all([loadLogo(logoUrl), loadTexture(logoTexUrl)])
+  const [logo, logoTex] = await Promise.all([loadLogo(logoUrl), loadTexture(logoTexUrl), fontsReady()])
+  await idle()
 
   // --- composition -------------------------------------------------------
   const stage = new Group() // centre du médaillon, mis à l'échelle selon l'écran
@@ -168,22 +179,26 @@ export async function initHero({ section, canvas, logoUrl, logoTexUrl, onReady }
 
   const ring = buildRing()
   coinPivot.add(ring)
+  await idle()
 
+  // aliments construits un par un, sans bloquer la page
   const small = lowPower
-  const items = itemDefs(logo)
-    .filter((d) => !(small && d.mobile === false))
-    .map((d, i) => {
-      const obj = normalize(d.make(), d.size)
-      const inner = new Group()
-      inner.add(obj)
-      obj.position.y -= obj.userData.height / 2
-      inner.rotation.set(...d.rot)
-      const holder = new Group()
-      holder.add(inner)
-      holder.position.set(...d.pos)
-      stage.add(holder)
-      return { ...d, holder, inner, phase: i * 1.37, base: holder.position.clone(), mbase: new Vector3(...(d.mpos ?? d.pos)) }
-    })
+  const defs = itemDefs(logo).filter((d) => !(small && d.mobile === false))
+  const items = []
+  for (const [i, d] of defs.entries()) {
+    const obj = normalize(d.make(), d.size)
+    const inner = new Group()
+    inner.add(obj)
+    obj.position.y -= obj.userData.height / 2
+    inner.rotation.set(...d.rot)
+    const holder = new Group()
+    holder.add(inner)
+    holder.position.set(...d.pos)
+    holder.scale.setScalar(0.001)
+    stage.add(holder)
+    items.push({ ...d, holder, inner, phase: i * 1.37, base: holder.position.clone(), mbase: new Vector3(...(d.mpos ?? d.pos)) })
+    if (i % 2 === 1) await idle()
+  }
 
   // braises lumineuses qui montent
   const EMBERS = small ? 40 : 90
@@ -211,21 +226,17 @@ export async function initHero({ section, canvas, logoUrl, logoTexUrl, onReady }
   )
   stage.add(embers)
 
-  // --- mise en page responsive ---------------------------------------------
+  // shaders prêts (sans figer la page) avant la première image
+  await warmUp(renderer, scene, camera)
+
+  // --- mise en page responsive : exactement la place du logo affiché en image ------------------
   const layout = { portrait: false }
   autoResize(section, renderer, camera, (w, h) => {
-    const visH = 2 * Math.tan(MathUtils.degToRad(camera.fov / 2)) * camera.position.z
-    const visW = visH * camera.aspect
-    layout.portrait = w / h < 0.95
-    if (layout.portrait) {
-      const d = Math.min(visW * 0.54, visH * 0.28)
-      stage.scale.setScalar(d / 2)
-      stage.position.set(0, visH * 0.2, 0)
-    } else {
-      const d = Math.min(visH * 0.44, visW * 0.28)
-      stage.scale.setScalar(d / 2)
-      stage.position.set(visW * 0.2, -visH * 0.045, 0)
-    }
+    const k = (2 * Math.tan(MathUtils.degToRad(camera.fov / 2)) * camera.position.z) / h // unités 3D par pixel
+    const r = medallionRect(w, h)
+    layout.portrait = r.portrait
+    stage.scale.setScalar((r.d * k) / 2)
+    stage.position.set((r.x - w / 2) * k, (h / 2 - r.y) * k, 0)
     layout.baseY = stage.position.y
     renderer.render(scene, camera)
   })
@@ -273,16 +284,10 @@ export async function initHero({ section, canvas, logoUrl, logoTexUrl, onReady }
   })
 
   // --- animation d'entrée -----------------------------------------------------
-  const intro = { coin: 0, items: 0, ring: 0 }
+  // le médaillon est déjà à l'écran (image) : il apparaît de face, à sa taille, puis s'anime
+  const intro = { coin: 1, items: 0, ring: 0 }
   const still = reducedMotion.matches
-  if (still) {
-    intro.coin = intro.items = intro.ring = 1
-  } else {
-    const tl = gsap.timeline({ delay: 0.15 })
-    tl.to(intro, { coin: 1, duration: 2.1, ease: 'expo.out' })
-      .to(intro, { items: 1, duration: 1.6, ease: 'back.out(1.4)' }, 0.55)
-      .to(intro, { ring: 1, duration: 1.2, ease: 'power2.out' }, 0.9)
-  }
+  if (still) intro.items = intro.ring = 1
 
   // --- boucle --------------------------------------------------------------------
   let t = 0
@@ -339,6 +344,14 @@ export async function initHero({ section, canvas, logoUrl, logoTexUrl, onReady }
     renderer.render(scene, camera)
   })
 
+  // une image complète est dessinée avant le fondu avec le logo
+  await nextFrame()
   onReady?.()
+  if (!still) {
+    gsap
+      .timeline({ delay: 0.25 })
+      .to(intro, { items: 1, duration: 1.6, ease: 'back.out(1.4)' }, 0)
+      .to(intro, { ring: 1, duration: 1.2, ease: 'power2.out' }, 0.2)
+  }
   return { renderer }
 }

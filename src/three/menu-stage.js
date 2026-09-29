@@ -26,6 +26,8 @@ import {
   addLoop,
   autoResize,
   reducedMotion,
+  idle as breathe,
+  warmUp,
 } from './core.js'
 import { buildModel } from './foods.js'
 import { glowTexture, shadowTexture } from './textures.js'
@@ -43,6 +45,7 @@ export async function initMenuStage({ container, canvas, categories, logoUrl, on
 
   const renderer = createRenderer(canvas)
   const scene = new Scene()
+  await breathe()
   scene.environment = studioEnvironment(renderer)
   scene.environmentIntensity = ENV_INTENSITY
   scene.fog = new Fog('#141211', 7.5, 13)
@@ -85,27 +88,29 @@ export async function initMenuStage({ container, canvas, categories, logoUrl, on
     slot.add(turntable)
     slot.userData.index = i
     carousel.add(slot)
-    return { slot, turntable, ringMat, kind: cat.model, built: false }
+    return { slot, turntable, ringMat, kind: cat.model }
   })
 
-  // les plats sont construits un par un (le plus proche d'abord) pour ne jamais bloquer la page
+  // les plats sont construits un par un (le plus proche d'abord) et leurs shaders compilés en
+  // arrière-plan avant d'être posés sur leur socle : aucun à-coup pendant le défilement
   const ringDistance = (i) => Math.min(Math.abs(i - initial), N - Math.abs(i - initial))
   const queue = slots.map((_, i) => i).sort((a, b) => ringDistance(a) - ringDistance(b))
+  let alive = true
   const buildSlot = (i) => {
     const s = slots[i]
-    if (s.built) return
-    s.turntable.add(buildModel(s.kind, logo))
-    s.built = true
+    s.ready ??= (async () => {
+      const model = buildModel(s.kind, logo)
+      await renderer.compileAsync(model, camera, scene)
+      if (alive) s.turntable.add(model)
+    })().catch((err) => console.warn('Plat 3D non construit :', err))
+    return s.ready
   }
-  const idle = window.requestIdleCallback ?? ((fn) => setTimeout(fn, 32))
-  const pump = () => {
-    const i = queue.shift()
-    if (i === undefined) return
-    buildSlot(i)
-    idle(pump, { timeout: 400 })
+  const pump = async () => {
+    while (alive && queue.length) {
+      await breathe()
+      await buildSlot(queue.shift())
+    }
   }
-  buildSlot(queue.shift())
-  idle(pump, { timeout: 400 })
 
   // halo orange au sol sous le plat actif
   const floorGlow = new Mesh(
@@ -115,6 +120,13 @@ export async function initMenuStage({ container, canvas, categories, logoUrl, on
   floorGlow.rotation.x = -PI / 2
   floorGlow.position.y = 0.01
   scene.add(floorGlow)
+
+  // premier plat posé tout de suite, puis toute la scène préparée pendant que le canvas est masqué
+  const first = slots[queue.shift()]
+  first.turntable.add(buildModel(first.kind, logo))
+  first.ready = Promise.resolve()
+  await warmUp(renderer, scene, camera)
+  pump()
 
   // --- cadrage responsive --------------------------------------------------------
   const stopResize = autoResize(container, renderer, camera, (w, h) => {
@@ -243,6 +255,7 @@ export async function initMenuStage({ container, canvas, categories, logoUrl, on
     prev: () => goTo(Math.round(state.angle) - 1),
     /** Libère le plateau (la carte a changé de catégories : un nouveau plateau est construit). */
     destroy() {
+      alive = false
       queue.length = 0
       tween?.kill()
       stopLoop()
